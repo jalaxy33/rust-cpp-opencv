@@ -1,0 +1,12 @@
+{
+  "dependencies": [
+    {
+      "name": "opencv",
+      "features": [
+        "contrib",
+        "nonfree",
+        "world"
+      ]
+    }
+  ]
+}

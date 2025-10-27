@@ -1,0 +1,196 @@
+# =============================================================================
+# Preamble
+# =============================================================================
+
+cmake_minimum_required(VERSION 3.10.0)
+
+# vcpkg integration
+set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+set(VCPKG_INSTALLED_DIR "$ENV{VCPKG_ROOT}/installed")   # use system-wide vcpkg installation
+
+# Force vcpkg to use Release libraries even in Debug mode
+# This is necessary to match Rust's CRT linkage (always Release)
+set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
+set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
+
+# generate `compile_commands.json` for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# =============================================================================
+# Project Configuration
+# =============================================================================
+
+project(opencv-demo VERSION 0.1.0 LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+
+# =============================================================================
+# Find Packages
+# =============================================================================
+
+find_package(OpenCV REQUIRED)
+link_libraries(${OpenCV_LIBS})
+
+
+# =============================================================================
+# Rust Configuration
+# =============================================================================
+
+function(setup_rust_library targetname)
+    # Fix Windows MSVC runtime library compatibility
+    # Always use /MD (Release CRT) to match Rust and vcpkg Release libraries
+    if(WIN32 AND MSVC)
+        target_compile_options(${targetname} PRIVATE /MD)
+        # Disable iterator debug level in Debug builds to match Release libraries
+        # Use generator expression to work with multi-config generators like Visual Studio
+        target_compile_definitions(${targetname} PRIVATE 
+            $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>
+        )
+    endif()
+
+    # Ensure the Rust library is built
+    set(RUST_TARGET_DIR ${CMAKE_SOURCE_DIR}/target)
+    set(rust_lib_dir ${RUST_TARGET_DIR}/release)   # always use release build for compatibility
+
+    if(NOT EXISTS ${rust_lib_dir})
+        message(WARNING "Rust library not found. Building Rust library now...")
+        execute_process(
+            COMMAND cargo build --release
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+    endif()
+
+    # Search for the Rust library
+    file(GLOB rust_lib_files
+        "${rust_lib_dir}/${CMAKE_STATIC_LIBRARY_PREFIX}*${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    )
+
+    # link Rust library
+    foreach(rust_lib IN LISTS rust_lib_files)
+        if (WIN32)
+            set(rust_lib "${rust_lib}.lib")
+        endif()
+        target_link_libraries(${targetname} PRIVATE ${rust_lib})
+    endforeach()
+
+
+    # Set include directories for cxx generated headers
+    file(GLOB cxxbridge_include_dirs
+        "${RUST_TARGET_DIR}/cxxbridge/*/src"
+    )
+    target_include_directories(${targetname} PRIVATE
+        ${RUST_TARGET_DIR}/cxxbridge
+        ${RUST_TARGET_DIR}/cxxbridge/rust
+        ${cxxbridge_include_dirs}
+    )
+
+    # Gather cxxbridge generated source files
+    file(GLOB cxxbridge_src
+        "${RUST_TARGET_DIR}/cxxbridge/*/src/*.rs.cpp"
+        "${RUST_TARGET_DIR}/cxxbridge/*/src/*.rs.cc"
+    )
+
+    if (cxxbridge_src)
+        target_sources(${targetname} PRIVATE ${cxxbridge_src})
+    endif()
+
+    # link cxx library
+    file(GLOB cxx_lib_files
+        "${rust_lib_dir}/build/cxx-*/out/*${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    )
+    foreach(cxx_lib IN LISTS cxx_lib_files)
+        target_link_libraries(${targetname} PRIVATE ${cxx_lib})
+    endforeach()
+
+    # Copy DLL on Windows
+    if(WIN32)
+        add_custom_command(TARGET ${targetname} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${rust_lib_files}"
+            $<TARGET_FILE_DIR:${targetname}>
+            COMMENT "Copying Rust DLL for $<CONFIG>."
+        )
+    endif()
+
+endfunction()
+
+
+# =============================================================================
+# Export vcpkg packages DLL (for Debug build)
+# =============================================================================
+
+# Function to copy vcpkg DLLs for Debug builds when using Release libraries
+function(export_vcpkg_package_dll targetname)
+    if(NOT WIN32)
+        return()
+    endif()
+    
+    # Find PowerShell
+    find_program(POWERSHELL_PATH NAMES pwsh powershell)
+    
+    if(NOT POWERSHELL_PATH)
+        message(WARNING "PowerShell not found, will copy all DLLs in Debug mode")
+        # Fallback: copy all DLLs only in Debug configuration
+        add_custom_command(TARGET ${targetname} POST_BUILD
+            COMMAND $<$<CONFIG:Debug>:${CMAKE_COMMAND}> -E copy_directory
+                "${VCPKG_INSTALLED_DIR}/x64-windows/bin"
+                "$<TARGET_FILE_DIR:${targetname}>"
+            COMMENT "Copying all vcpkg Release DLLs for Debug build"
+        )
+    else()
+        # Use vcpkg's applocal.ps1 to copy only necessary DLLs in Debug configuration
+        set(VCPKG_APPLOCAL_SCRIPT "$ENV{VCPKG_ROOT}/scripts/buildsystems/msbuild/applocal.ps1")
+        add_custom_command(TARGET ${targetname} POST_BUILD
+            COMMAND $<$<CONFIG:Debug>:${POWERSHELL_PATH}> 
+                $<$<CONFIG:Debug>:-noprofile> 
+                $<$<CONFIG:Debug>:-executionpolicy> 
+                $<$<CONFIG:Debug>:Bypass>
+                $<$<CONFIG:Debug>:-file> 
+                $<$<CONFIG:Debug>:"${VCPKG_APPLOCAL_SCRIPT}">
+                $<$<CONFIG:Debug>:-targetBinary> 
+                $<$<CONFIG:Debug>:"$<TARGET_FILE:${targetname}>">
+                $<$<CONFIG:Debug>:-installedDir> 
+                $<$<CONFIG:Debug>:"${VCPKG_INSTALLED_DIR}/x64-windows/bin">
+                $<$<CONFIG:Debug>:-tlogFile> 
+                $<$<CONFIG:Debug>:"$<TARGET_FILE_DIR:${targetname}>/${targetname}.tlog">
+            COMMENT "Copying necessary vcpkg Release DLLs for Debug build."
+            COMMAND_EXPAND_LISTS
+        )
+    endif()
+endfunction()
+
+
+# =============================================================================
+# Target Configuration
+# =============================================================================
+
+set(targetname demo)
+add_executable(${targetname} src/main.cpp)
+target_include_directories(${targetname} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+setup_rust_library(${targetname})
+
+# Set global definitions for c++ codes
+target_compile_definitions(${targetname} PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+
+# Fix: In Debug mode with CMAKE_MAP_IMPORTED_CONFIG_DEBUG=Release,
+# vcpkg's applocal.ps1 looks for DLLs in /debug/bin but we use Release libs
+# So we manually call applocal.ps1 to copy only necessary DLLs from /bin (Release)
+export_vcpkg_package_dll(${targetname})
+
+
+# =============================================================================
+# Test Configuration
+# =============================================================================
+
+enable_testing()
+
+# test function (no external dependencies)
+function(add_test_target test_name test_file)
+    add_executable(${test_name} ${test_file})
+    target_include_directories(${test_name} PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(${test_name} PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+    add_test(NAME ${test_name} COMMAND ${test_name})
+endfunction()
+
+add_test_target(test_common tests/test_common.cpp)
+

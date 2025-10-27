@@ -1,0 +1,5 @@
+[env]
+
+VCPKGS_DYNAMIC = "1"
+OPENCV_LINK_LIBS = "opencv_world4,opencv_img_hash4"
+
