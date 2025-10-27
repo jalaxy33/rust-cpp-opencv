@@ -11,7 +11,7 @@ fn verify_opencv() -> Result<()> {
 
     println!("OpenCV version: {}", cv::core::CV_VERSION);
 
-    // 创建一个 3x3 的矩阵
+    // Create a simple mat
     let mat = cv::core::Mat::zeros(3, 3, cv::core::CV_8UC1)?.to_mat()?;
     println!("Created a {}x{} matrix", mat.rows(), mat.cols());
 
