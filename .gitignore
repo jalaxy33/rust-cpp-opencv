@@ -8,4 +8,5 @@ build
 # vcpkg installed files
 vcpkg_installed
 
-
+# IDE artifacts
+.vscode/
