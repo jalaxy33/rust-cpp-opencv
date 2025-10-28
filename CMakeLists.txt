@@ -35,6 +35,11 @@ find_package(OpenCV REQUIRED)
 link_libraries(${OpenCV_LIBS})
 
 
+find_package(ITK CONFIG REQUIRED)
+include(${ITK_USE_FILE})
+link_libraries(${ITK_LIBRARIES})
+
+
 # =============================================================================
 # Rust Configuration
 # =============================================================================

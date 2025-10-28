@@ -2,10 +2,14 @@
 //! FFI Bridge between C++ and Rust
 #pragma once
 #include <memory>
+#include <string>
 #include <opencv2/opencv.hpp>
+#include "rust/cxx.h"
 
 #include "common.h"
 #include "example.h"
+
+#include "itk_example.h"
 
 // ------------- Shared Types -------------
 
@@ -74,4 +78,19 @@ inline std::unique_ptr<CMat> _flip_image_cpp(const CMat &input_image, int flip_c
         throw_error("flip_image_cpp: flipped image is empty");
     }
     return std::make_unique<CMat>(flipped_image);
+}
+
+inline std::unique_ptr<CMat> _itk_read_image_cpp(const std::string &filename)
+{
+    if (filename.empty())
+    {
+        throw_error("_itk_read_image_cpp: filename is empty");
+    }
+    
+    cv::Mat cv_image = itk_utils::readImageAsCvMat(filename);
+    if (cv_image.empty())
+    {
+        throw_error("_itk_read_image_cpp: read image is empty");
+    }
+    return std::make_unique<CMat>(cv_image);
 }

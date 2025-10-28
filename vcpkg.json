@@ -2,11 +2,8 @@
   "dependencies": [
     {
       "name": "opencv",
-      "features": [
-        "contrib",
-        "nonfree",
-        "world"
-      ]
-    }
+      "features": ["contrib", "nonfree", "world"]
+    },
+    "itk"
   ]
 }
