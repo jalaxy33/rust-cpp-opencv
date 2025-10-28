@@ -3,8 +3,8 @@
 use anyhow::{Result, ensure};
 use opencv as cv;
 
-use core_rlib::*;
 use core_rlib::from_cpp;
+use core_rlib::*;
 
 fn verify_opencv() -> Result<()> {
     use opencv::prelude::*;
@@ -81,12 +81,37 @@ fn try_mix_cpp(img_path: &str) -> Result<()> {
     Ok(())
 }
 
+fn try_itk_read() -> Result<()> {
+    use opencv::highgui::*;
+    use opencv::prelude::*;
+
+    println!("Testing ITK read image...");
+    let img_path = "assets/example.jpg";
+
+    ensure!(
+        is_path_valid(img_path),
+        "Image path is invalid: {}",
+        img_path
+    );
+
+    println!("  Calling from_cpp::itk_read_image...");
+    let img = from_cpp::itk_read_image(img_path)?;
+    println!("  Image size: {} x {}", img.rows(), img.cols());
+
+    imshow("ITK Read Image", &img)?;
+    wait_key(0)?;
+    destroy_all_windows()?;
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     verify_opencv()?;
 
     let img_path = "assets/example.jpg";
     try_native_rust(img_path)?;
     try_mix_cpp(img_path)?;
+    try_itk_read()?;
 
     Ok(())
 }
