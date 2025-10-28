@@ -7,8 +7,6 @@
 #include "example.h"
 #include "from_rust.h"
 
-#include "itk_example.h"
-
 using namespace std;
 
 void verify_opencv()
@@ -72,46 +70,6 @@ void try_mix_rust(const string &img_path)
     cv::destroyAllWindows();
 }
 
-void try_itk(const std::string &img_path)
-{
-    std::cout << "Calling ITK function via C++..." << std::endl;
-
-    // ----------- Read image using ITK -----------
-
-    itk_utils::ImageType::Pointer image = itk_utils::readImage(img_path);
-    if (!image)
-    {
-        throw_error("Failed to read image using ITK: " + img_path);
-    }
-    std::cout << " ITK Image read successfully. Size: " << image->GetLargestPossibleRegion().GetSize() << std::endl;
-
-    // ----------- Convert ITK image to OpenCV Mat -----------
-
-    cv::Mat cv_image = itk_utils::convertToCvMat(image);
-
-    if (cv_image.empty())
-    {
-        throw_error("Failed to convert ITK image to OpenCV Mat");
-    }
-    std::cout << " Converted ITK image to OpenCV Mat successfully. Size: " << cv_image.size() << std::endl;
-
-    // ----------- All in one: Read and convert -----------
-
-    cv::Mat cv_image_all_in_one = itk_utils::readImageAsCvMat(img_path);
-    if (cv_image_all_in_one.empty())
-    {
-        throw_error("Failed to read and convert image using ITK");
-    }
-    std::cout << " Read and converted image using ITK successfully. Size: " << cv_image_all_in_one.size() << std::endl;
-
-    // ----------- Display the image using OpenCV -----------
-
-    cv::imshow("ITK Converted Image", cv_image);
-    cv::imshow("ITK Read-Converted Image", cv_image_all_in_one);
-    cv::waitKey(0);
-    cv::destroyAllWindows();
-}
-
 int main()
 {
     verify_opencv();
@@ -121,8 +79,6 @@ int main()
 
     try_native_cpp(img_path);
     try_mix_rust(img_path);
-
-    try_itk(img_path);
 
     return 0;
 }

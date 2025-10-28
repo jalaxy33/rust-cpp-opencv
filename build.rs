@@ -1,22 +1,16 @@
 fn main() {
     // --------- find vcpkg packages ---------
     vcpkg::find_package("opencv").unwrap();
-    vcpkg::find_package("itk").unwrap();
 
     // --------- find package includes ---------
     let opencv_includes =
         search_package_includes("find_package(OpenCV REQUIRED)", "OpenCV_INCLUDE_DIRS");
-
-    let itk_includes =
-        search_package_includes("find_package(ITK CONFIG REQUIRED)", "ITK_INCLUDE_DIRS");
-
 
     // --------- Build CXX Bridge ---------
     let rust_sources = vec!["src/ffi_bridge.rs"];
     cxx_build::bridges(rust_sources)
         .include("include")
         .includes(opencv_includes)
-        .includes(itk_includes)
         .std("c++17")
         .compile("ffi_bridge");
 

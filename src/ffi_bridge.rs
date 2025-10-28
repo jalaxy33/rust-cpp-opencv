@@ -19,7 +19,6 @@ mod ffi {
 
         /// ******** Functions from C++ ********
         fn _flip_image_cpp(input_mat: &CMat, flip_code: i32) -> UniquePtr<CMat>;
-        fn _itk_read_image_cpp(file_path: &CxxString) -> UniquePtr<CMat>;
     }
 
     extern "Rust" {
@@ -112,24 +111,6 @@ pub mod from_cpp {
 
             Ok(result)
         }
-    }
-
-    pub fn itk_read_image(file_path: &str) -> Result<cv::core::Mat> {
-        assert!(
-            crate::is_path_valid(file_path),
-            "File path is invalid: {}",
-            file_path
-        );
-
-        cxx::let_cxx_string!(c_file_path = file_path);
-
-        // Call C++ ITK read function - cxx will handle the string conversion
-        let img_cpp = ffi::_itk_read_image_cpp(&c_file_path);
-
-        // C++ Mat -> Rust Mat
-        let img_rust = cv_conversion::safe_convert_cpp_to_rust(&img_cpp)?;
-
-        Ok(img_rust)
     }
 }
 
