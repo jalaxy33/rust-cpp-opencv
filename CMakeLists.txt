@@ -13,6 +13,10 @@ set(VCPKG_INSTALLED_DIR "$ENV{VCPKG_ROOT}/installed")   # use system-wide vcpkg 
 set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
 set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
 
+# Disable vcpkg's automatic DLL copy mechanism
+# We will manually manage DLL copying for all configurations
+set(VCPKG_APPLOCAL_DEPS OFF CACHE BOOL "Disable vcpkg automatic DLL copy" FORCE)
+
 # generate `compile_commands.json` for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -115,10 +119,12 @@ endfunction()
 
 
 # =============================================================================
-# Export vcpkg packages DLL (for Debug build)
+# Export vcpkg packages DLL (for all configurations)
 # =============================================================================
 
-# Function to copy vcpkg DLLs for Debug builds when using Release libraries
+# Function to copy vcpkg Release DLLs for all build configurations
+# Since VCPKG_APPLOCAL_DEPS is disabled, we manually manage DLL copying
+# All configurations use Release DLLs due to CMAKE_MAP_IMPORTED_CONFIG_DEBUG=Release
 function(export_vcpkg_package_dll targetname)
     if(NOT WIN32)
         return()
@@ -128,32 +134,26 @@ function(export_vcpkg_package_dll targetname)
     find_program(POWERSHELL_PATH NAMES pwsh powershell)
     
     if(NOT POWERSHELL_PATH)
-        message(WARNING "PowerShell not found, will copy all DLLs in Debug mode")
-        # Fallback: copy all DLLs only in Debug configuration
+        message(WARNING "PowerShell not found, will copy all Release DLLs for all configurations")
+        # Fallback: copy all Release DLLs for all configurations
         add_custom_command(TARGET ${targetname} POST_BUILD
-            COMMAND $<$<CONFIG:Debug>:${CMAKE_COMMAND}> -E copy_directory
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${VCPKG_INSTALLED_DIR}/x64-windows/bin"
                 "$<TARGET_FILE_DIR:${targetname}>"
-            COMMENT "Copying all vcpkg Release DLLs for Debug build"
+            COMMENT "Copying all vcpkg Release DLLs for $<CONFIG> build"
         )
     else()
-        # Use vcpkg's applocal.ps1 to copy only necessary DLLs in Debug configuration
+        # Use vcpkg's applocal.ps1 to copy only necessary Release DLLs
+        # Always use /bin (Release) directory since we always link against Release libraries
         set(VCPKG_APPLOCAL_SCRIPT "$ENV{VCPKG_ROOT}/scripts/buildsystems/msbuild/applocal.ps1")
         add_custom_command(TARGET ${targetname} POST_BUILD
-            COMMAND $<$<CONFIG:Debug>:${POWERSHELL_PATH}> 
-                $<$<CONFIG:Debug>:-noprofile> 
-                $<$<CONFIG:Debug>:-executionpolicy> 
-                $<$<CONFIG:Debug>:Bypass>
-                $<$<CONFIG:Debug>:-file> 
-                $<$<CONFIG:Debug>:"${VCPKG_APPLOCAL_SCRIPT}">
-                $<$<CONFIG:Debug>:-targetBinary> 
-                $<$<CONFIG:Debug>:"$<TARGET_FILE:${targetname}>">
-                $<$<CONFIG:Debug>:-installedDir> 
-                $<$<CONFIG:Debug>:"${VCPKG_INSTALLED_DIR}/x64-windows/bin">
-                $<$<CONFIG:Debug>:-tlogFile> 
-                $<$<CONFIG:Debug>:"$<TARGET_FILE_DIR:${targetname}>/${targetname}.tlog">
-            COMMENT "Copying necessary vcpkg Release DLLs for Debug build."
-            COMMAND_EXPAND_LISTS
+            COMMAND "${POWERSHELL_PATH}" -noprofile -executionpolicy Bypass
+                -file "${VCPKG_APPLOCAL_SCRIPT}"
+                -targetBinary "$<TARGET_FILE:${targetname}>"
+                -installedDir "${VCPKG_INSTALLED_DIR}/x64-windows/bin"
+                -tlogFile "$<TARGET_FILE_DIR:${targetname}>/${targetname}.tlog"
+            COMMENT "Copying necessary vcpkg Release DLLs for $<CONFIG> build."
+            VERBATIM
         )
     endif()
 endfunction()
@@ -172,9 +172,9 @@ setup_rust_library(${targetname})
 # Set global definitions for c++ codes
 target_compile_definitions(${targetname} PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 
-# Fix: In Debug mode with CMAKE_MAP_IMPORTED_CONFIG_DEBUG=Release,
-# vcpkg's applocal.ps1 looks for DLLs in /debug/bin but we use Release libs
-# So we manually call applocal.ps1 to copy only necessary DLLs from /bin (Release)
+# Manually copy vcpkg Release DLLs for all configurations
+# Required since VCPKG_APPLOCAL_DEPS is disabled to avoid conflicts
+# All configs use Release libraries due to CMAKE_MAP_IMPORTED_CONFIG_DEBUG=Release
 export_vcpkg_package_dll(${targetname})
 
 
