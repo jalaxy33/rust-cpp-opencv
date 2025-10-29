@@ -134,6 +134,17 @@ function(export_vcpkg_package_dll targetname)
     if(NOT WIN32)
         return()
     endif()
+
+    # Fix Windows MSVC runtime library compatibility
+    # Always use /MD (Release CRT) to match Rust and vcpkg Release libraries
+    if(WIN32 AND MSVC)
+        target_compile_options(${targetname} PRIVATE /MD)
+        # Disable iterator debug level in Debug builds to match Release libraries
+        # Use generator expression to work with multi-config generators like Visual Studio
+        target_compile_definitions(${targetname} PRIVATE 
+            $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>
+        )
+    endif()
     
     # Find PowerShell
     find_program(POWERSHELL_PATH NAMES pwsh powershell)
