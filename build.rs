@@ -27,6 +27,10 @@ fn search_package_includes(
     find_package_command: &str,
     include_dirs_var: &str,
 ) -> Vec<std::path::PathBuf> {
+    let project_root = std::env::var("CARGO_MANIFEST_DIR")
+        .unwrap()
+        .replace("\\", "/");
+
     let cpp_contents = r#"int main() {}"#;
 
     let cmake_contents = format!(
@@ -35,6 +39,7 @@ cmake_minimum_required(VERSION 3.15)
 
 set(CMAKE_TOOLCHAIN_FILE "$ENV{{VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake")
 set(VCPKG_INSTALLED_DIR "$ENV{{VCPKG_ROOT}}/installed")   # use system-wide vcpkg installation
+set(VCPKG_MANIFEST_DIR "{}")  # set the manifest directory to the project root
 
 project(search_includes VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -43,7 +48,7 @@ message(STATUS "INCLUDE_DIRS: ${{{}}}")
 
 add_executable(temp temp.cpp)
     "#,
-        find_package_command, include_dirs_var
+        project_root.as_str(), find_package_command, include_dirs_var
     );
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
