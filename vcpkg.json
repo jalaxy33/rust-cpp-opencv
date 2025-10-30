@@ -1,18 +1,9 @@
 {
   "dependencies": [
     {
-      "name": "itk",
-      "features": [
-        "opencv"
-      ]
-    },
-    {
       "name": "opencv",
-      "features": [
-        "contrib",
-        "nonfree",
-        "world"
-      ]
-    }
+      "features": ["contrib", "nonfree", "world"]
+    },
+    "itk"
   ]
 }

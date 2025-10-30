@@ -63,18 +63,18 @@ namespace itk_utils
             return cv::Mat();
         }
 
-        // 获取图像区域和大小
+        // Get image region and size
         ImageType::RegionType region = itk_image->GetLargestPossibleRegion();
         ImageType::SizeType size = region.GetSize();
 
-        // 获取图像的原始数据指针
+        // Get pointer to raw data
         PixelType *buffer = itk_image->GetBufferPointer();
 
-        // 创建 OpenCV Mat，注意 ITK 和 OpenCV 的行列顺序
+        // Create cv::Mat from the buffer
         // ITK: [width, height], OpenCV: [height, width]
         cv::Mat cv_image(size[1], size[0], CV_8UC1, buffer);
 
-        // 返回深拷贝，避免数据生命周期问题
+        // return deep copy to avoid memory leaking
         return cv_image.clone();
     }
 
