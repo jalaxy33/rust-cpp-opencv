@@ -4,7 +4,6 @@
 #include <memory>
 #include <string>
 #include <opencv2/opencv.hpp>
-#include "rust/cxx.h"
 
 #include "common.h"
 #include "example.h"
