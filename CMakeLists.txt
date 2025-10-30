@@ -206,6 +206,15 @@ function(add_test_target test_name test_file)
     target_include_directories(${test_name} PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(${test_name} PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
     add_test(NAME ${test_name} COMMAND ${test_name})
+
+    if(WIN32 AND MSVC)
+        target_compile_options(${test_name} PRIVATE /MD)
+        # Disable iterator debug level in Debug builds to match Release libraries
+        # Use generator expression to work with multi-config generators like Visual Studio
+        target_compile_definitions(${test_name} PRIVATE 
+            $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>
+        )
+    endif()
 endfunction()
 
 add_test_target(test_common tests/test_common.cpp)

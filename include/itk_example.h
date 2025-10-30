@@ -39,7 +39,7 @@ namespace itk_utils
     {
         // Ensure IO factories are registered
         registerIOFactories();
-        
+
         using ReaderType = itk::ImageFileReader<ImageType>;
         ReaderType::Pointer reader = ReaderType::New();
         reader->SetFileName(filename);
@@ -96,8 +96,3 @@ namespace itk_utils
     }
 
 } // namespace itk_utils
-
-
-
-
-
