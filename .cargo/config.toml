@@ -2,3 +2,5 @@
 
 VCPKGRS_DYNAMIC = "1"
 
+# For opencv correct linkage
+OPENCV_LINK_LIBS = "opencv_world4,opencv_img_hash4"
