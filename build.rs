@@ -10,7 +10,7 @@ fn main() -> Result<()> {
         search_package_includes("find_package(OpenCV REQUIRED)", "OpenCV_INCLUDE_DIRS")?;
 
     // --------- Build CXX Bridge ---------
-    let rust_sources = vec!["src/ffi_bridge.rs"];
+    let rust_sources = vec!["src/ffi_bridge/bridge.rs"];
     cxx_build::bridges(rust_sources)
         .include("include")
         .includes(opencv_includes)
@@ -28,7 +28,8 @@ fn main() -> Result<()> {
     // ------ Set rerun triggers ------
     // Avoid unnecessary recompilation
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/ffi_bridge.rs");
+    println!("cargo:rerun-if-changed=src/ffi_bridge/bridge.rs");
+    println!("cargo:rerun-if-changed=src/ffi_bridge/to_cpp.rs");
     println!("cargo:rerun-if-changed=include/ffi_bridge.h");
 
     Ok(())

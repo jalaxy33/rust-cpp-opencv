@@ -3,6 +3,7 @@
     {
       "name": "opencv",
       "features": ["contrib", "nonfree", "world"]
-    }
+    },
+    "itk"
   ]
 }
