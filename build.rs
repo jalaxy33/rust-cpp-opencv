@@ -1,26 +1,51 @@
-fn main() {
-    // --------- find vcpkg packages ---------
-    vcpkg::find_package("opencv").unwrap();
-    vcpkg::find_package("itk").unwrap();
+use anyhow::Result;
+use std::path::PathBuf;
 
-    // --------- find package includes ---------
+fn main() -> Result<()> {
+    // ------ find c++ libraries ------
+    vcpkg::find_package("opencv")?;
+    vcpkg::find_package("itk")?;
+
+    // ------ find package includes ------
     let opencv_includes =
-        search_package_includes("find_package(OpenCV REQUIRED)", "OpenCV_INCLUDE_DIRS");
-
+        search_package_includes("find_package(OpenCV REQUIRED)", "OpenCV_INCLUDE_DIRS")?;
     let itk_includes =
-        search_package_includes("find_package(ITK CONFIG REQUIRED)", "ITK_INCLUDE_DIRS");
+        search_package_includes("find_package(ITK CONFIG REQUIRED)", "ITK_INCLUDE_DIRS")?;
 
+    println!(
+        "cargo:warning=Found OpenCV include dirs: {:?}",
+        opencv_includes
+    );
+    println!(
+        "cargo:warning=Found ITK include dirs: {:?}",
+        itk_includes
+    );
+    
     // --------- Build CXX Bridge ---------
-    let rust_sources = vec!["src/ffi_bridge.rs"];
+    let rust_sources = vec!["src/rust/ffi_bridge/bridge.rs"];
+    
     cxx_build::bridges(rust_sources)
         .include("include")
         .includes(opencv_includes)
         .includes(itk_includes)
         .std("c++17")
-        .compile("ffi_bridge");
+        .try_compile("ffi_bridge")?;
 
-    println!("cargo:rerun-if-changed=src/ffi_bridge.rs");
+    // ------ Link Windows system libraries ------
+    // Required for ITK Windows API dependencies
+    #[cfg(target_os = "windows")]
+    {
+        println!("cargo:rustc-link-lib=Advapi32");
+        println!("cargo:rustc-link-lib=Shell32");
+    }
+
+    // ------ Set rerun triggers ------
+    // Avoid unnecessary recompilation
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/rust/ffi_bridge/bridge.rs");
     println!("cargo:rerun-if-changed=include/ffi_bridge.h");
+    
+    Ok(())
 }
 
 /// Search for include directories of a vcpkg package using CMake
@@ -28,78 +53,105 @@ fn main() {
 /// # Arguments
 /// * `find_package_command` - The CMake find_package command, e.g., "find_package(OpenCV REQUIRED)"
 /// * `include_dirs_var` - The CMake variable name for include directories, e.g., "OpenCV_INCLUDE_DIRS"
-fn search_package_includes(
+pub fn search_package_includes(
     find_package_command: &str,
     include_dirs_var: &str,
-) -> Vec<std::path::PathBuf> {
-    let project_root = std::env::var("CARGO_MANIFEST_DIR")
-        .unwrap()
-        .replace("\\", "/");
+) -> Result<Vec<PathBuf>> {
+    use cargo_metadata::MetadataCommand;
+    use regex::Regex;
+    use std::collections::HashMap;
 
-    let cpp_contents = r#"int main() {}"#;
+    // ----- Get paths ------
+    let metadata = MetadataCommand::new().exec()?;
+    let workspace_root = metadata.workspace_root;
+    let target_dir = metadata.target_directory;
 
+    // ----- Prepare CMake script -----
+    let cpp_contents = "int main() {}";
     let cmake_contents = format!(
         r#"
 cmake_minimum_required(VERSION 3.15)
 
 set(CMAKE_TOOLCHAIN_FILE "$ENV{{VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake")
 set(VCPKG_INSTALLED_DIR "$ENV{{VCPKG_ROOT}}/installed")   # use system-wide vcpkg installation
-set(VCPKG_MANIFEST_DIR "{}")  # set the manifest directory to the project root
+set(VCPKG_MANIFEST_DIR "{manifest_dir}")  # set the manifest directory to the project root
 
 project(search_includes VERSION 0.1.0 LANGUAGES C CXX)
 
-{}
-message(STATUS "INCLUDE_DIRS: ${{{}}}")
-
-add_executable(temp temp.cpp)
-    "#,
-        project_root.as_str(), find_package_command, include_dirs_var
+{find_command}
+message(STATUS "INCLUDE_DIRS: ${{{include_var}}}")
+        "#,
+        manifest_dir = workspace_root.to_string().replace("\\", "/"),
+        find_command = find_package_command,
+        include_var = include_dirs_var,
     );
 
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    let temp_build_dir = std::path::Path::new(&out_dir).join("temp");
-    std::fs::create_dir_all(&temp_build_dir).unwrap();
+    // ----- Find include directories -----
 
-    // Write temp.cpp
+    let record_file = target_dir.join("package_includes.json");
+
+    // load records if exists
+    let mut records: HashMap<String, Vec<PathBuf>> = HashMap::new();
+    if record_file.exists() {
+        let record_content =
+            std::fs::read_to_string(&record_file).expect("Failed to read package_includes.json");
+        records =
+            serde_json::from_str(&record_content).expect("failed to parse package_includes.json");
+    }
+
+    // return if recorded
+    if records.contains_key(include_dirs_var) {
+        let include_dirs = records.get(include_dirs_var).unwrap().clone();
+        return Ok(include_dirs);
+    }
+
+    // Create temp build directory and files
+    let temp_build_dir = target_dir.join("temp");
     let temp_cpp_path = temp_build_dir.join("temp.cpp");
-    std::fs::write(&temp_cpp_path, cpp_contents).unwrap();
+    let temp_cmake_path = temp_build_dir.join("CMakeLists.txt");
 
-    // Write CMakeLists.txt
-    let cmake_path = temp_build_dir.join("CMakeLists.txt");
-    std::fs::write(&cmake_path, cmake_contents).unwrap();
+    if temp_build_dir.exists() {
+        std::fs::remove_dir_all(&temp_build_dir)?;
+    }
 
-    // Run cmake
-    let output = std::process::Command::new("cmake")
+    std::fs::create_dir_all(&temp_build_dir)?;
+    std::fs::write(&temp_cpp_path, cpp_contents)?;
+    std::fs::write(&temp_cmake_path, cmake_contents)?;
+
+    // Run CMake to configure the project
+    let cmake_output = std::process::Command::new("cmake")
         .current_dir(&temp_build_dir)
         .arg(".")
         .output()
         .expect("Failed to run cmake");
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Parse CMake output to find include directories
+    let stdout = String::from_utf8_lossy(&cmake_output.stdout);
+    let stderr = String::from_utf8_lossy(&cmake_output.stderr);
 
+    let output_text = format!("{}\n{}", stdout, stderr);
+    let re = Regex::new(r"INCLUDE_DIRS:\s*(.*)").unwrap();
     let mut include_dirs = Vec::new();
 
-    // Search for INCLUDE_DIRS in both stdout and stderr
-    for line in stdout.lines().chain(stderr.lines()) {
-        if line.contains("INCLUDE_DIRS:") {
-            // Parse the line to extract include directories
-            // Format: "-- INCLUDE_DIRS: path1;path2;path3"
-            if let Some(dirs_part) = line.split("INCLUDE_DIRS:").nth(1) {
-                let dirs = dirs_part.trim();
-                // Split by semicolon (CMake list separator)
-                for dir in dirs.split(';') {
-                    let dir = dir.trim();
-                    if !dir.is_empty() {
-                        include_dirs.push(std::path::PathBuf::from(dir));
-                    }
-                }
+    if let Some(caps) = re.captures(&output_text) {
+        let dirs = caps.get(1).unwrap().as_str();
+        for dir in dirs.split(';') {
+            let dir = dir.trim();
+            if !dir.is_empty() {
+                include_dirs.push(PathBuf::from(dir));
             }
         }
     }
 
-    // Clean up the temporary build directory
-    let _ = std::fs::remove_dir_all(&temp_build_dir);
+    // update record file
+    records.insert(include_dirs_var.to_string(), include_dirs.clone());
 
-    include_dirs
+    // Save record
+    let record_content =
+        serde_json::to_string_pretty(&records).expect("Failed to serialize package includes");
+
+    std::fs::write(&record_file, record_content)
+        .expect(format!("Failed to save {}", record_file.to_string()).as_str());
+
+    Ok(include_dirs)
 }

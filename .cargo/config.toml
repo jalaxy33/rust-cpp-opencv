@@ -4,3 +4,20 @@ VCPKGRS_DYNAMIC = "1"
 
 # For opencv correct linkage
 OPENCV_LINK_LIBS = "opencv_world4,opencv_img_hash4"
+
+# === Build Speed Optimization ===
+
+[profile.dev]
+debug = 1               # Line tables only - faster compilation
+incremental = true      # Enable incremental compilation
+
+[profile.dev.package."*"]
+# Optimize dependencies (opencv, ITK) even in dev mode
+# Compiled once, improves runtime without slowing dev iteration
+opt-level = 3
+debug = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
