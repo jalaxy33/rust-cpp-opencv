@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     );
     
     // --------- Build CXX Bridge ---------
-    let rust_sources = vec!["src/rust/ffi_bridge/bridge.rs"];
+    let rust_sources = vec!["src/ffi_bridge.rs"];
     
     cxx_build::bridges(rust_sources)
         .include("include")
@@ -42,7 +42,7 @@ fn main() -> Result<()> {
     // ------ Set rerun triggers ------
     // Avoid unnecessary recompilation
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/rust/ffi_bridge/bridge.rs");
+    println!("cargo:rerun-if-changed=src/ffi_bridge.rs");
     println!("cargo:rerun-if-changed=include/ffi_bridge.h");
     
     Ok(())
