@@ -1,4 +1,4 @@
-//! src/lib.rs
+//! lib.rs
 
 use anyhow::Result;
 use opencv as cv;

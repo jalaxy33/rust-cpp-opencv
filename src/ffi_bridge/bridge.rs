@@ -1,4 +1,4 @@
-//! cxx_bridge.rs
+//! bridge.rs
 //! 
 //! CXX Bridge between Rust and C++
 
