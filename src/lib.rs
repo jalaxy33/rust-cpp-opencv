@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn test_is_path_valid() {
-        assert!(is_path_valid("src/lib.rs")); // assuming this file exists
+        assert!(is_path_valid("Cargo.toml")); // assuming this file exists
         assert!(!is_path_valid("non_existent_file.txt"));
     }
 

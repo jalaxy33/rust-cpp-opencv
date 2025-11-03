@@ -1,9 +1,6 @@
-//! src/main.rs
-
 use anyhow::{Result, ensure};
 use opencv as cv;
 
-use core_rlib::from_cpp;
 use core_rlib::*;
 
 fn verify_opencv() -> Result<()> {

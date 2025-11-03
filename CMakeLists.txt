@@ -84,7 +84,7 @@ function(setup_rust_library targetname)
 
     # Set include directories for cxx generated headers
     file(GLOB cxxbridge_include_dirs
-        "${RUST_TARGET_DIR}/cxxbridge/*/src"
+        "${RUST_TARGET_DIR}/cxxbridge/*/src/*"
     )
     target_include_directories(${targetname} PRIVATE
         ${RUST_TARGET_DIR}/cxxbridge
@@ -94,8 +94,8 @@ function(setup_rust_library targetname)
 
     # Gather cxxbridge generated source files
     file(GLOB cxxbridge_src
-        "${RUST_TARGET_DIR}/cxxbridge/*/src/*.rs.cpp"
-        "${RUST_TARGET_DIR}/cxxbridge/*/src/*.rs.cc"
+        "${RUST_TARGET_DIR}/cxxbridge/*/src/*/*.rs.cpp"
+        "${RUST_TARGET_DIR}/cxxbridge/*/src/*/*.rs.cc"
     )
 
     if (cxxbridge_src)

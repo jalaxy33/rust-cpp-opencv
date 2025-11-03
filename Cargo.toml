@@ -6,7 +6,6 @@ edition = "2024"
 [lib]
 name = "core_rlib"
 crate-type = ["rlib", "cdylib"]
-path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.100"
