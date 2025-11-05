@@ -145,5 +145,8 @@ message(STATUS "INCLUDE_DIRS: ${{{include_var}}}")
     std::fs::write(&record_file, record_content)
         .expect(format!("Failed to save {}", record_file.to_string()).as_str());
 
+    // Clean up temporary files
+    std::fs::remove_dir_all(&temp_build_dir)?;
+
     Ok(include_dirs)
 }
